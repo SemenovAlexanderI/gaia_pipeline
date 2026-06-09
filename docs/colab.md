@@ -6,8 +6,10 @@
 5. Нажмите Save.
 6. Нажмите Connect справа сверху.
 
+```sh
 %cd /content
 !git clone https://github.com/gornkv/gaia_pipeline.git
+```
 
 затем зайти в файлы, показать скрытые, создать .env скопировав все из .env.example
 добавить HF_TOKEN, аккаунт должен согласится с правилами на https://huggingface.co/datasets/gaia-benchmark/GAIA
@@ -17,12 +19,13 @@
 
 ```env
 BASE_MODEL_RUNNER_TYPE=llama16GB
-SCAFFOLD_BON_CANDIDATES=1
 ```
 
+Команда для запуска:
+```sh
 %cd /content/gaia_pipeline
 !sh runner/start.sh
-
+```
 
 хелпер для быстрого запуска
 
