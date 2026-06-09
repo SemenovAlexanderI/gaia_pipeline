@@ -1,6 +1,8 @@
 #!/bin/sh
 set -aue
 
+pkill -f '[l]lama_cpp.server' 2>/dev/null && sleep 2
+
 "${VENV_PYTHON}" -m pip install "llama-cpp-python[server]" "huggingface-hub"
 
 "${VENV_PYTHON}" -m llama_cpp.server \
@@ -10,28 +12,25 @@ set -aue
   --host "0.0.0.0" \
   --port "18080" \
   --n_gpu_layers 0 \
-  --n_ctx "4096" \
-  --n_threads "4" \
-  --chat_format chatml & pid=$!
-cleanup() { kill "$pid" 2>/dev/null || :; }
-trap cleanup EXIT INT TERM
+  --n_ctx "65536" \
+  --n_threads "1" \
+  --chat_format chatml \
+  > "${REPO_ROOT}/_state/runner/${RUN_TASK_NAME}.stdout" \
+  2> "${REPO_ROOT}/_state/runner/${RUN_TASK_NAME}.stderr" & pid=$!
+echo "${pid}" >> "${PID_FILE}"
 
-while :; do
-  if "${VENV_PYTHON}" - <<'PY'
+check_service() {
+  "${VENV_PYTHON}" - <<'PY'
 from urllib.request import urlopen
 
 try:
-    with urlopen("http://127.0.0.1:18080/v1/models", timeout=5):
-        pass
+    urlopen("http://127.0.0.1:18080/v1/models", timeout=5).close()
 except Exception:
     raise SystemExit(1)
 PY
-  then
-    touch "${REPO_ROOT}/_state/runner/${RUN_TASK_NAME}.ready"
-    break
-  fi
-  kill -0 "$pid" 2>/dev/null || wait "$pid"
+}
+
+while ! check_service; do
+  kill -0 "$pid" 2>/dev/null || exit 1
   sleep 5
 done
-
-wait "$pid"
