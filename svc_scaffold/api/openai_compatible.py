@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import os
+import time
+import uuid
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from svc_scaffold.clients.openai_compatible import OpenAICompatibleModelClient
+from svc_scaffold.core import Scaffold
+
+
+def openai_response(
+    response: dict[str, Any],
+    model: str,
+    scaffold: Scaffold,
+    model_client: OpenAICompatibleModelClient,
+) -> dict[str, Any]:
+    result = dict(response)
+    result["id"] = f"scaffold-bon-{uuid.uuid4().hex}"
+    result["model"] = model
+    result["scaffold"] = {
+        "algorithm": "best_of_n",
+        "candidates": scaffold.candidates,
+        "model_client": model_client.name,
+    }
+    return result
+
+
+def create_app(scaffold: Scaffold, model_client: OpenAICompatibleModelClient) -> FastAPI:
+    model = os.environ["SCAFFOLD_MODEL_NAME"]
+    app = FastAPI(title="GAIA Scaffold OpenAI-compatible BoN Proxy")
+
+    @app.get("/health")
+    async def health() -> dict[str, Any]:
+        await model_client.health()
+        return {"ok": True, "adapter": "openai_compatible", "model_client": model_client.name}
+
+    @app.get("/v1/models")
+    async def list_models() -> dict[str, Any]:
+        return {
+            "object": "list",
+            "data": [
+                {
+                    "id": model,
+                    "object": "model",
+                    "created": int(time.time()),
+                    "owned_by": "svc_scaffold",
+                }
+            ],
+        }
+
+    @app.post("/v1/chat/completions")
+    async def chat_completions(request: Request) -> JSONResponse:
+        payload = await request.json()
+        if payload.get("stream"):
+            raise HTTPException(status_code=400, detail="Streaming is not supported by the BoN proxy yet")
+
+        response = await scaffold.chat_completions(payload)
+        return JSONResponse(openai_response(response, model, scaffold, model_client))
+
+    return app

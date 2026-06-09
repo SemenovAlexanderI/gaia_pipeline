@@ -1,0 +1,54 @@
+#!/bin/sh
+set -aue
+
+if [ ! -x "${REPO_ROOT}/_state/llama.cpp-cuda/cuda-12.8/llama-server" ]; then
+  mkdir -p "${REPO_ROOT}/_state/downloads" "${REPO_ROOT}/_state/llama.cpp-cuda"
+  curl -fL "https://github.com/ai-dock/llama.cpp-cuda/releases/download/b9568/llama.cpp-b9568-cuda-12.8-amd64.tar.gz" \
+    -o "${REPO_ROOT}/_state/downloads/llama.cpp-b9568-cuda-12.8-amd64.tar.gz"
+  rm -rf "${REPO_ROOT}/_state/llama.cpp-cuda"/*
+  tar -xzf "${REPO_ROOT}/_state/downloads/llama.cpp-b9568-cuda-12.8-amd64.tar.gz" \
+    -C "${REPO_ROOT}/_state/llama.cpp-cuda"
+fi
+
+LD_LIBRARY_PATH="${REPO_ROOT}/_state/llama.cpp-cuda/cuda-12.8${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+"${REPO_ROOT}/_state/llama.cpp-cuda/cuda-12.8/llama-server" \
+  -hf "unsloth/Qwen3.5-9B-GGUF:Q4_K_M" \
+  --alias "${MODEL_NAME}" \
+  --host "0.0.0.0" \
+  --port "18082" \
+  --api-key "${MODEL_API_KEY}" \
+  --ctx-size "131072" \
+  --n-gpu-layers "999" \
+  --threads "4" \
+  --parallel "1" \
+  --batch-size "512" \
+  --ubatch-size "128" \
+  --jinja & pid=$!
+cleanup() { kill "$pid" 2>/dev/null || :; }
+trap cleanup EXIT INT TERM
+
+while :; do
+  if "${VENV_PYTHON}" - <<'PY'
+import os
+from urllib.request import Request, urlopen
+
+request = Request("http://127.0.0.1:18082/v1/models")
+api_key = os.environ.get("MODEL_API_KEY")
+if api_key:
+    request.add_header("Authorization", f"Bearer {api_key}")
+try:
+    with urlopen(request, timeout=5):
+        pass
+except Exception:
+    raise SystemExit(1)
+PY
+  then
+    touch "${REPO_ROOT}/_state/runner/${RUN_TASK_NAME}.ready"
+    break
+  fi
+  kill -0 "$pid" 2>/dev/null || wait "$pid"
+  sleep 5
+done
+
+wait "$pid"
