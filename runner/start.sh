@@ -3,11 +3,19 @@ set -aue
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+load_env() {
+  ENV_FILE="${TMPDIR:-/tmp}/gaia-pipeline-env.$$"
+  tr -d '\r' < "$1" > "${ENV_FILE}"
+  . "${ENV_FILE}"
+}
+
+load_env "${REPO_ROOT}/.env"
+
 mkdir -p "${REPO_ROOT}/_state/runner"
 if [ "${START_LOGGING:-}" != "1" ]; then
   rm -rf "${REPO_ROOT}/_state/runner"/*
-  START_STDOUT_PIPE="${REPO_ROOT}/_state/runner/start.stdout.pipe.$$"
-  START_STDERR_PIPE="${REPO_ROOT}/_state/runner/start.stderr.pipe.$$"
+  START_STDOUT_PIPE="${TMPDIR:-/tmp}/gaia-pipeline.stdout.pipe.$$"
+  START_STDERR_PIPE="${TMPDIR:-/tmp}/gaia-pipeline.stderr.pipe.$$"
   mkfifo "${START_STDOUT_PIPE}" "${START_STDERR_PIPE}"
   START_LOGGING=1
   tee "${REPO_ROOT}/_state/runner/start.stdout" < "${START_STDOUT_PIPE}" &
@@ -15,22 +23,14 @@ if [ "${START_LOGGING:-}" != "1" ]; then
   exec sh "$0" "$@" > "${START_STDOUT_PIPE}" 2> "${START_STDERR_PIPE}"
 fi
 
-load_env() {
-  mkdir -p "${REPO_ROOT}/_state/env"
-  tr -d '\r' < "$1" > "${REPO_ROOT}/_state/env/$(basename "$1")"
-  . "${REPO_ROOT}/_state/env/$(basename "$1")"
-}
-
-load_env "${REPO_ROOT}/.env"
-cd "${REPO_ROOT}"
-
-VENV_PYTHON="${REPO_ROOT}/_state/.venv/bin/python"
+VENV_PYTHON="${REPO_ROOT}/.venv/bin/python"
 HF_HOME="${REPO_ROOT}/_state/huggingface"
-INSPECT_LOG_DIR="${REPO_ROOT}/inspect-logs"
-PLAYWRIGHT_BROWSERS_PATH="${REPO_ROOT}/_state/playwright-browsers"
-PATH="${REPO_ROOT}/_state/.venv/bin:${PATH}"
+INSPECT_LOG_DIR="${REPO_ROOT}/_state/inspect-logs"
+PLAYWRIGHT_BROWSERS_PATH="${REPO_ROOT}/playwright-browsers"
+PATH="${REPO_ROOT}/.venv/bin:${PATH}"
 PID_FILE="${REPO_ROOT}/_state/runner/pids"
 
+cd "${REPO_ROOT}"
 mkdir -p \
   "${HF_HOME}" \
   "${INSPECT_LOG_DIR}" \
@@ -58,13 +58,34 @@ create_venv() {
     return
   fi
 
-  if "${PYTHON_BIN:-python3}" -m venv "${REPO_ROOT}/_state/.venv"; then
+  if "${PYTHON_BIN:-python3}" -m venv "${REPO_ROOT}/.venv"; then
     return
   fi
 
-  rm -rf "${REPO_ROOT}/_state/.venv"
-  "${PYTHON_BIN:-python3}" -m venv --system-site-packages --without-pip "${REPO_ROOT}/_state/.venv"
+  rm -rf "${REPO_ROOT}/.venv"
+  "${PYTHON_BIN:-python3}" -m venv --system-site-packages --without-pip "${REPO_ROOT}/.venv"
   "${VENV_PYTHON}" -m pip install --upgrade pip wheel setuptools
+}
+
+check_evironment() {
+  "${VENV_PYTHON}" - <<'PY'
+from importlib.metadata import version
+from shutil import which
+
+import fastapi  # noqa: F401
+import httpx  # noqa: F401
+import inspect_ai  # noqa: F401
+import inspect_evals.gaia  # noqa: F401
+import openai  # noqa: F401
+import playwright  # noqa: F401
+import uvicorn  # noqa: F401
+
+print(f"inspect-ai={version('inspect-ai')}")
+print(f"inspect-evals={version('inspect-evals')}")
+
+if which("inspect-tool-support") is None:
+    raise RuntimeError("inspect-tool-support executable is not available on PATH")
+PY
 }
 
 install_environment() {
@@ -72,36 +93,16 @@ install_environment() {
   "${VENV_PYTHON}" -m pip install \
     pip wheel setuptools "inspect-evals[gaia]" inspect-tool-support openai playwright \
     -r "${REPO_ROOT}/svc_scaffold/requirement.txt"
-  "${REPO_ROOT}/_state/.venv/bin/inspect-tool-support" post-install
+  "${REPO_ROOT}/.venv/bin/inspect-tool-support" post-install
   "${VENV_PYTHON}" -m playwright install chromium
-  "${VENV_PYTHON}" "${REPO_ROOT}/runner/check_environment.py"
+  check_evironment
 }
 
-publish_inspect_logs() {
-  [ -n "${LOGS_BRANCH:-}" ] || return
-  git fetch origin
-  git switch -C "${LOGS_BRANCH}" "origin/${LOGS_BRANCH}" 2>/dev/null ||
-    git switch -C "${LOGS_BRANCH}"
-  git add inspect-logs
-  git -c user.name="gaia-pipeline" -c user.email="gaia-pipeline@example.invalid" commit -m "update inspect logs"
-  git -c credential.helper= \
-    -c 'credential.helper=!f() {
-      echo username=x-access-token
-      echo password="$GITHUB_TOKEN"
-    }; f' push origin "${LOGS_BRANCH}"
-}
-
-if ! "${VENV_PYTHON}" "${REPO_ROOT}/runner/check_environment.py" >/dev/null 2>&1; then
+if ! check_evironment >/dev/null 2>&1; then
   install_environment
 fi
 
-RUN_TASK_NAME="2_run_base_model_${BASE_MODEL_RUNNER_TYPE}"
-load_env "${REPO_ROOT}/runner/${RUN_TASK_NAME}.env"
-sh "${REPO_ROOT}/runner/${RUN_TASK_NAME}.sh"
-
-load_env "${REPO_ROOT}/runner/3_run_scaffold.env"
-sh "${REPO_ROOT}/runner/3_run_scaffold.sh"
-
-sh "${REPO_ROOT}/runner/4_run_benchmark.sh"
-
-publish_inspect_logs
+load_env "${REPO_ROOT}/runner/base_model/${BASE_MODEL_RUNNER_TYPE}.env"
+sh "${REPO_ROOT}/runner/base_model/${BASE_MODEL_RUNNER_TYPE}.sh"
+sh "${REPO_ROOT}/runner/scaffold.sh"
+sh "${REPO_ROOT}/runner/benchmark.sh"

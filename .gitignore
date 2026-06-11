@@ -1,3 +1,6 @@
 _state/
 .DS_Store
 .env
+.venv
+playwright-browsers/
+__pycache__/
