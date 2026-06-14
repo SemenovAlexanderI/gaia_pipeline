@@ -12,6 +12,6 @@ model_client = OpenAICompatibleModelClient(
     os.environ["BASE_MODEL_API_KEY"],
     os.environ["BASE_MODEL_NAME"],
 )
-scaffold = Scaffold(model_client, max(1, int(os.getenv("SCAFFOLD_BON_CANDIDATES", "3"))))
+scaffold = Scaffold(model_client)
 
 app = create_openai_compatible_app(scaffold, model_client)

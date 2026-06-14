@@ -19,19 +19,19 @@ def openai_response(
     model_client: OpenAICompatibleModelClient,
 ) -> dict[str, Any]:
     result = dict(response)
-    result["id"] = f"scaffold-bon-{uuid.uuid4().hex}"
+    result["id"] = f"scaffold-{uuid.uuid4().hex}"
     result["model"] = model
-    result["scaffold"] = {
-        "algorithm": "best_of_n",
-        "candidates": scaffold.candidates,
-        "model_client": model_client.name,
-    }
+    if not isinstance(result.get("scaffold"), dict):
+        result["scaffold"] = {}
+    result["scaffold"]["algorithm"] = "breakpoints"
+    result["scaffold"]["model_client"] = model_client.name
+
     return result
 
 
 def create_app(scaffold: Scaffold, model_client: OpenAICompatibleModelClient) -> FastAPI:
     model = os.environ["SCAFFOLD_MODEL_NAME"]
-    app = FastAPI(title="GAIA Scaffold OpenAI-compatible BoN Proxy")
+    app = FastAPI(title="GAIA Scaffold OpenAI-compatible Proxy")
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
