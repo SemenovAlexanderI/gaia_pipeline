@@ -28,7 +28,7 @@ LD_LIBRARY_PATH="${REPO_ROOT}/_state/llama.cpp-cuda/cuda-12.8${LD_LIBRARY_PATH:+
   --ctx-size "131072" \
   --n-gpu-layers "999" \
   --threads "4" \
-  --parallel "1" \
+  --parallel "3" \
   --batch-size "512" \
   --ubatch-size "128" \
   --jinja \
