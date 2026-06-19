@@ -18,12 +18,12 @@
 
 # main.py
 import os
-from svc_scaffold.clients.openai_compatible import OpenAICompatibleClient
+from svc_scaffold.clients.openai_compatible import OpenAICompatibleModelClient
 from svc_scaffold.clients.catts import CATTSModelClient
 from svc_scaffold.core import Scaffold
 
 def build_scaffold() -> Scaffold:
-    base_client = OpenAICompatibleClient(
+    base_client = OpenAICompatibleModelClient(
         base_url=os.environ["BASE_MODEL_BASE_URL"],
         api_key=os.environ.get("BASE_MODEL_API_KEY", ""),
         model=os.environ["BASE_MODEL_NAME"],
