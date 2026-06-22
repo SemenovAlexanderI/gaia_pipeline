@@ -103,6 +103,10 @@ if ! check_evironment >/dev/null 2>&1; then
 fi
 
 load_env "${REPO_ROOT}/runner/base_model/${BASE_MODEL_RUNNER_TYPE}.env"
+echo "[1/3] Starting base model runner: ${BASE_MODEL_RUNNER_TYPE}"
 sh "${REPO_ROOT}/runner/base_model/${BASE_MODEL_RUNNER_TYPE}.sh"
+echo "[2/3] Starting scaffold at http://127.0.0.1:${SCAFFOLD_PORT}"
 sh "${REPO_ROOT}/runner/scaffold.sh"
+echo "[3/3] Starting Inspect task: ${GAIA_TASK} (${GAIA_SPLIT})"
+echo "Inspect logs: ${INSPECT_LOG_DIR}"
 sh "${REPO_ROOT}/runner/benchmark.sh"

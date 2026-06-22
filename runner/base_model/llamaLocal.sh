@@ -45,19 +45,16 @@ LOG_STDERR="${REPO_ROOT}/_state/runner/${BASE_MODEL_RUNNER_TYPE}.stderr"
 echo "${pid}" >> "${PID_FILE}"
 
 check_service() {
-  "${VENV_PYTHON}" - <<'PY'
-import os
-from urllib.request import Request, urlopen
-
-request = Request(f"{os.environ['BASE_MODEL_API_BASE_URL']}/models")
-api_key = os.environ.get("BASE_MODEL_API_KEY")
-if api_key:
-    request.add_header("Authorization", f"Bearer {api_key}")
-try:
-    urlopen(request, timeout=5).close()
-except Exception:
-    raise SystemExit(1)
-PY
+  if [ -n "${BASE_MODEL_API_KEY}" ]; then
+    curl --noproxy '*' --fail --silent --show-error \
+      --max-time 5 \
+      --header "Authorization: Bearer ${BASE_MODEL_API_KEY}" \
+      "${BASE_MODEL_API_BASE_URL}/models" >/dev/null
+  else
+    curl --noproxy '*' --fail --silent --show-error \
+      --max-time 5 \
+      "${BASE_MODEL_API_BASE_URL}/models" >/dev/null
+  fi
 }
 
 echo "Starting ${LLAMA_SERVER_BIN} with ${LOCAL_MODEL_PATH}"

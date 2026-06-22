@@ -22,8 +22,26 @@ HF_TOKEN=hf_...
 Runner choices:
 
 - `llama16GB`: Colab/T4-oriented runner. Downloads a prebuilt CUDA `llama-server` from `ai-dock/llama.cpp-cuda` and serves `unsloth/Qwen3.5-9B-GGUF:Q4_K_M`.
+- `llamaLocal`: local Linux runner. Uses an existing `llama-server` binary and the GGUF at `LOCAL_MODEL_PATH`; it does not download a CUDA build or a model.
 - `vllm16GB`: vLLM AWQ runner for `QuantTrio/Qwen3.5-9B-AWQ`.
 - `cpu2B`: CPU fallback using `llama-cpp-python`.
+
+For a local `llama-server` installation and an already downloaded model, set:
+
+```env
+BASE_MODEL_RUNNER_TYPE=llamaLocal
+LLAMA_SERVER_BIN=llama-server
+LOCAL_MODEL_PATH=/home/user/models/Qwen3.5-9B-Q4_K_M.gguf
+LLAMA_CTX_SIZE=32768
+LLAMA_PARALLEL=1
+```
+
+Then run `sh runner/start.sh`. CUDA compatibility is determined by the locally
+installed `llama-server`; the pipeline does not download or link another CUDA build.
+The local runner starts with a 32768-token context to keep the KV cache modest;
+increase `LLAMA_CTX_SIZE` after a successful smoke test if your GPU has room.
+If the process exits early, inspect `_state/runner/start.stderr` and
+`_state/runner/llamaLocal.stderr`.
 
 ## Run With Docker Compose
 
