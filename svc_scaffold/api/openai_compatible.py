@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
@@ -8,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from svc_scaffold.clients.openai_compatible import OpenAICompatibleModelClient
+from svc_scaffold.clients.openai_compatible import OpenAICompatibleModelClient, UpstreamModelError
 from svc_scaffold.core import Scaffold
 
 
@@ -58,7 +59,14 @@ def create_app(scaffold: Scaffold, model_client: OpenAICompatibleModelClient) ->
         if payload.get("stream"):
             raise HTTPException(status_code=400, detail="Streaming is not supported by the BoN proxy yet")
 
-        response = await scaffold.chat_completions(payload)
+        try:
+            response = await scaffold.chat_completions(payload)
+        except UpstreamModelError as exc:
+            try:
+                content = json.loads(exc.response_text)
+            except Exception:
+                content = {"error": {"message": exc.response_text, "type": "upstream_model_error"}}
+            return JSONResponse(content, status_code=exc.status_code)
         return JSONResponse(openai_response(response, model, scaffold, model_client))
 
     return app

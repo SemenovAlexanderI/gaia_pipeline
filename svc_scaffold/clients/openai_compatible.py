@@ -47,5 +47,12 @@ class OpenAICompatibleModelClient:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise RuntimeError(f"{exc}; response={response.text}") from exc
+            raise UpstreamModelError(exc.response.status_code, response.text) from exc
         return response.json()
+
+
+class UpstreamModelError(RuntimeError):
+    def __init__(self, status_code: int, response_text: str) -> None:
+        self.status_code = status_code
+        self.response_text = response_text
+        super().__init__(f"Upstream model returned {status_code}: {response_text}")

@@ -30,7 +30,7 @@ For a local `llama-server` installation and an already downloaded model, set:
 ```bash
 export LOCAL_MODEL_PATH=/home/user/models/Qwen3.5-9B-Q4_K_M.gguf
 export LLAMA_SERVER_BIN=llama-server
-export LLAMA_CTX_SIZE=32768
+export LLAMA_CTX_SIZE=262144
 export LLAMA_PARALLEL=1
 sh runner/localModelU.sh
 ```
@@ -56,8 +56,9 @@ sudo chown "${USER}:${USER}" /shared_files
 
 CUDA compatibility is determined by the locally
 installed `llama-server`; the pipeline does not download or link another CUDA build.
-The local runner starts with a 32768-token context to keep the KV cache modest;
-increase `LLAMA_CTX_SIZE` after a successful smoke test if your GPU has room.
+The local runner starts with a 262144-token context. This matches long GAIA
+prompts better than the conservative local default used earlier. Lower
+`LLAMA_CTX_SIZE` only if your GPU/CPU memory cannot hold the KV cache.
 If the process exits early, inspect `_state/runner/start.stderr` and
 `_state/runner/llamaLocal.stderr`.
 
