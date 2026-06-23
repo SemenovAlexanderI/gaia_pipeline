@@ -40,11 +40,11 @@ will crash on invalid proxy values such as `socks://127.0.0.1:3128/`. If your
 GAIA run needs a proxy for external web access, use a valid proxy URL and set
 `INSPECT_DISABLE_PROXY=0`.
 
-The GAIA dataset is gated and must be present in the Hugging Face cache used by
-the runner. By default that cache is `_state/huggingface`; override it with
-`HF_HOME=/path/to/huggingface-cache sh runner/localModelU.sh` if you already
-downloaded the dataset elsewhere. `GAIA_CHECK_DATASET_CACHE=1` fails early with
-a clear message when the dataset is missing locally.
+The GAIA dataset is gated. For offline/local runs, download it elsewhere with
+`hf download gaia-benchmark/GAIA --repo-type dataset --local-dir ./GAIA`, then
+copy it into this project as `datasets/GAIA`. The runner links that folder into
+the cache location expected by `inspect_evals`. If the folder lives elsewhere,
+set `GAIA_DATASET_DIR=/path/to/GAIA`.
 
 CUDA compatibility is determined by the locally
 installed `llama-server`; the pipeline does not download or link another CUDA build.
