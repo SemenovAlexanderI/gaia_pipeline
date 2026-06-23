@@ -46,6 +46,14 @@ copy it into this project as `datasets/GAIA`. The runner links that folder into
 the cache location expected by `inspect_evals`. If the folder lives elsewhere,
 set `GAIA_DATASET_DIR=/path/to/GAIA`.
 
+When using `GAIA_SANDBOX=local`, GAIA sample attachments are placed under
+`/shared_files`. Create that directory once before running:
+
+```bash
+sudo mkdir -p /shared_files
+sudo chown "${USER}:${USER}" /shared_files
+```
+
 CUDA compatibility is determined by the locally
 installed `llama-server`; the pipeline does not download or link another CUDA build.
 The local runner starts with a 32768-token context to keep the KV cache modest;

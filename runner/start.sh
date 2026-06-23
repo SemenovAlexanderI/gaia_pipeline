@@ -165,6 +165,23 @@ if which("inspect-tool-support") is None:
 PY
 }
 
+check_local_sandbox() {
+  if [ "${GAIA_SANDBOX:-}" != "local" ]; then
+    return
+  fi
+  if [ -d /shared_files ] && [ -w /shared_files ]; then
+    return
+  fi
+
+  echo "GAIA_SANDBOX=local requires a writable /shared_files directory." >&2
+  echo "inspect_evals/gaia uses /shared_files for per-sample attachments." >&2
+  echo "Create it once on Ubuntu with:" >&2
+  echo "  sudo mkdir -p /shared_files" >&2
+  echo "  sudo chown \"\${USER}:\${USER}\" /shared_files" >&2
+  echo "Or use Docker sandbox instead of local if Docker is available." >&2
+  exit 1
+}
+
 install_environment() {
   create_venv
   "${VENV_PYTHON}" -m pip install \
@@ -178,6 +195,8 @@ install_environment() {
 if ! check_environment >/dev/null 2>&1; then
   install_environment
 fi
+
+check_local_sandbox
 
 load_env "${REPO_ROOT}/runner/base_model/${BASE_MODEL_RUNNER_TYPE}.env"
 echo "[1/3] Starting base model runner: ${BASE_MODEL_RUNNER_TYPE}"
