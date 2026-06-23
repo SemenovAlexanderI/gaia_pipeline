@@ -7,6 +7,7 @@ pkill -f '[u]vicorn svc_scaffold.main:app' 2>/dev/null && sleep 2
   > "${REPO_ROOT}/_state/runner/scaffold.stdout" \
   2> "${REPO_ROOT}/_state/runner/scaffold.stderr" & pid=$!
 echo "${pid}" >> "${PID_FILE}"
+LOG_STDERR="${REPO_ROOT}/_state/runner/scaffold.stderr"
 
 check_service() {
   "${VENV_PYTHON}" - <<'PY'
@@ -21,6 +22,11 @@ PY
 }
 
 while ! check_service; do
-  kill -0 "$pid" 2>/dev/null || exit 1
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "scaffold exited before becoming healthy. Last log lines:" >&2
+    tail -n 80 "${LOG_STDERR}" >&2 || :
+    wait "$pid" || exit $?
+    exit 1
+  fi
   sleep 5
 done

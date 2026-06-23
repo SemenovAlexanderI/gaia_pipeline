@@ -44,6 +44,23 @@ INSPECT_LOG_DIR="${REPO_ROOT}/_state/inspect-logs"
 PLAYWRIGHT_BROWSERS_PATH="${REPO_ROOT}/playwright-browsers"
 PID_FILE="${REPO_ROOT}/_state/runner/pids"
 
+prepend_no_proxy() {
+  value="$1"
+  current="${NO_PROXY:-${no_proxy:-}}"
+  case ",${current}," in
+    *,"${value}",*) printf '%s\n' "${current}" ;;
+    ,) printf '%s\n' "${value}" ;;
+    *) printf '%s,%s\n' "${value}" "${current}" ;;
+  esac
+}
+
+NO_PROXY="$(prepend_no_proxy localhost)"
+NO_PROXY="$(prepend_no_proxy 127.0.0.1)"
+NO_PROXY="$(prepend_no_proxy 0.0.0.0)"
+NO_PROXY="$(prepend_no_proxy ::1)"
+no_proxy="${NO_PROXY}"
+export NO_PROXY no_proxy
+
 resolve_command() {
   case "$1" in
     */*) printf '%s\n' "$1" ;;
