@@ -3,6 +3,10 @@ set -aue
 
 pkill -f '[i]nspect eval' 2>/dev/null && sleep 2
 
+if [ "${INSPECT_DISABLE_PROXY:-1}" = "1" ]; then
+  unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy OPENAI_PROXY
+fi
+
 set -- eval "${GAIA_TASK}" \
   --model "openai-api/gaia_model/${SCAFFOLD_MODEL_NAME}" \
   --sandbox "${GAIA_SANDBOX}" \

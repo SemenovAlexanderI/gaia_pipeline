@@ -35,6 +35,11 @@ export LLAMA_PARALLEL=1
 sh runner/localModelU.sh
 ```
 
+`INSPECT_DISABLE_PROXY=1` is enabled in `.env.example` because Inspect/httpx
+will crash on invalid proxy values such as `socks://127.0.0.1:3128/`. If your
+GAIA run needs a proxy for external web access, use a valid proxy URL and set
+`INSPECT_DISABLE_PROXY=0`.
+
 CUDA compatibility is determined by the locally
 installed `llama-server`; the pipeline does not download or link another CUDA build.
 The local runner starts with a 32768-token context to keep the KV cache modest;
