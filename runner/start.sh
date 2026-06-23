@@ -2,14 +2,30 @@
 set -aue
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REQUESTED_BASE_MODEL_RUNNER_TYPE="${1:-${BASE_MODEL_RUNNER_TYPE:-}}"
 
 load_env() {
+  if [ ! -f "$1" ]; then
+    echo "Missing environment file: $1" >&2
+    echo "Create it with: cp .env.example .env" >&2
+    exit 1
+  fi
   ENV_FILE="${TMPDIR:-/tmp}/gaia-pipeline-env.$$"
   tr -d '\r' < "$1" > "${ENV_FILE}"
   . "${ENV_FILE}"
 }
 
-load_env "${REPO_ROOT}/.env"
+if [ "${START_ENV_LOADED:-0}" != "1" ]; then
+  load_env "${REPO_ROOT}/.env"
+fi
+if [ -n "${REQUESTED_BASE_MODEL_RUNNER_TYPE}" ]; then
+  BASE_MODEL_RUNNER_TYPE="${REQUESTED_BASE_MODEL_RUNNER_TYPE}"
+fi
+if [ -z "${BASE_MODEL_RUNNER_TYPE:-}" ]; then
+  echo "BASE_MODEL_RUNNER_TYPE is not set." >&2
+  echo "Use a model entrypoint such as: sh runner/localModelU.sh" >&2
+  exit 1
+fi
 
 mkdir -p "${REPO_ROOT}/_state/runner"
 if [ "${START_LOGGING:-}" != "1" ]; then
@@ -23,12 +39,47 @@ if [ "${START_LOGGING:-}" != "1" ]; then
   exec sh "$0" "$@" > "${START_STDOUT_PIPE}" 2> "${START_STDERR_PIPE}"
 fi
 
-VENV_PYTHON="${REPO_ROOT}/.venv/bin/python"
 HF_HOME="${REPO_ROOT}/_state/huggingface"
 INSPECT_LOG_DIR="${REPO_ROOT}/_state/inspect-logs"
 PLAYWRIGHT_BROWSERS_PATH="${REPO_ROOT}/playwright-browsers"
-PATH="${REPO_ROOT}/.venv/bin:${PATH}"
 PID_FILE="${REPO_ROOT}/_state/runner/pids"
+
+resolve_command() {
+  case "$1" in
+    */*) printf '%s\n' "$1" ;;
+    *) command -v "$1" ;;
+  esac
+}
+
+select_python() {
+  RUNNER_MANAGED_VENV="${RUNNER_MANAGED_VENV:-auto}"
+
+  if [ -n "${PYTHON_BIN:-}" ]; then
+    VENV_PYTHON="$(resolve_command "${PYTHON_BIN}")"
+    RUNNER_MANAGED_VENV=0
+  elif [ "${RUNNER_MANAGED_VENV}" = "0" ] || [ "${RUNNER_MANAGED_VENV}" = "false" ]; then
+    if [ -n "${CONDA_PREFIX:-}" ] && [ -x "${CONDA_PREFIX}/bin/python" ]; then
+      VENV_PYTHON="${CONDA_PREFIX}/bin/python"
+    else
+      VENV_PYTHON="$(resolve_command python3)"
+    fi
+  elif [ "${RUNNER_MANAGED_VENV}" = "auto" ] \
+    && [ -n "${CONDA_PREFIX:-}" ] \
+    && [ -x "${CONDA_PREFIX}/bin/python" ]; then
+    VENV_PYTHON="${CONDA_PREFIX}/bin/python"
+    RUNNER_MANAGED_VENV=0
+  else
+    VENV_PYTHON="${REPO_ROOT}/.venv/bin/python"
+    RUNNER_MANAGED_VENV=1
+  fi
+
+  PYTHON_BIN_DIR="$(dirname "${VENV_PYTHON}")"
+  PATH="${PYTHON_BIN_DIR}:${PATH}"
+  INSPECT_BIN="${INSPECT_BIN:-${PYTHON_BIN_DIR}/inspect}"
+  INSPECT_TOOL_SUPPORT_BIN="${INSPECT_TOOL_SUPPORT_BIN:-${PYTHON_BIN_DIR}/inspect-tool-support}"
+}
+
+select_python
 
 cd "${REPO_ROOT}"
 mkdir -p \
@@ -54,6 +105,15 @@ trap cleanup EXIT
 trap 'exit 1' INT TERM
 
 create_venv() {
+  if [ "${RUNNER_MANAGED_VENV}" != "1" ]; then
+    "${VENV_PYTHON}" -m pip --version >/dev/null 2>&1 || {
+      echo "pip is not available in ${VENV_PYTHON}" >&2
+      echo "Install pip in the selected Python environment or unset RUNNER_MANAGED_VENV." >&2
+      exit 1
+    }
+    return
+  fi
+
   if "${VENV_PYTHON}" -m pip --version >/dev/null 2>&1; then
     return
   fi
@@ -67,7 +127,7 @@ create_venv() {
   "${VENV_PYTHON}" -m pip install --upgrade pip wheel setuptools
 }
 
-check_evironment() {
+check_environment() {
   "${VENV_PYTHON}" - <<'PY'
 from importlib.metadata import version
 from shutil import which
@@ -93,12 +153,12 @@ install_environment() {
   "${VENV_PYTHON}" -m pip install \
     pip wheel setuptools "inspect-evals[gaia]" inspect-tool-support openai playwright \
     -r "${REPO_ROOT}/svc_scaffold/requirement.txt"
-  "${REPO_ROOT}/.venv/bin/inspect-tool-support" post-install
+  "${INSPECT_TOOL_SUPPORT_BIN}" post-install
   "${VENV_PYTHON}" -m playwright install chromium
-  check_evironment
+  check_environment
 }
 
-if ! check_evironment >/dev/null 2>&1; then
+if ! check_environment >/dev/null 2>&1; then
   install_environment
 fi
 

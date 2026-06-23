@@ -13,7 +13,6 @@
 
 затем зайти в файлы, показать скрытые, создать .env скопировав все из .env.example
 добавить HF_TOKEN, аккаунт должен согласится с правилами на https://huggingface.co/datasets/gaia-benchmark/GAIA
-установить BASE_MODEL_RUNNER_TYPE=llama16GB
 если нужно хранить `_state` на Google Drive между Colab-сессиями, перед запуском выполнить Python-ячейку:
 
 ```python
@@ -23,14 +22,14 @@ drive.mount("/content/drive")
 
 Этот режим скачивает готовый CUDA llama.cpp server из релизов ai-dock/llama.cpp-cuda и запускает GGUF:
 
-```env
-BASE_MODEL_RUNNER_TYPE=llama16GB
+```sh
+sh runner/start.sh llama16GB
 ```
 
 Команда для запуска:
 ```sh
 %cd /content/gaia_pipeline
-!sh runner/start.sh
+!sh runner/start.sh llama16GB
 ```
 
 хелпер для быстрого запуска
@@ -57,7 +56,7 @@ drive.mount("/content/drive")
 
 %cd /content/gaia_pipeline
 !git pull
-!sh runner/start.sh
+!sh runner/start.sh llama16GB
 ```
 
 Потом https://drive.google.com/drive/my-drive и там в корне будет папка gaia_pipeline
