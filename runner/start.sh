@@ -39,9 +39,9 @@ if [ "${START_LOGGING:-}" != "1" ]; then
   exec sh "$0" "$@" > "${START_STDOUT_PIPE}" 2> "${START_STDERR_PIPE}"
 fi
 
-HF_HOME="${REPO_ROOT}/_state/huggingface"
-INSPECT_LOG_DIR="${REPO_ROOT}/_state/inspect-logs"
-PLAYWRIGHT_BROWSERS_PATH="${REPO_ROOT}/playwright-browsers"
+HF_HOME="${HF_HOME:-${REPO_ROOT}/_state/huggingface}"
+INSPECT_LOG_DIR="${INSPECT_LOG_DIR:-${REPO_ROOT}/_state/inspect-logs}"
+PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-${REPO_ROOT}/playwright-browsers}"
 PID_FILE="${REPO_ROOT}/_state/runner/pids"
 
 prepend_no_proxy() {
