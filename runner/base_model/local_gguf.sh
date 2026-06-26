@@ -1,7 +1,11 @@
 #!/bin/sh
 set -eu
 
-: "${LOCAL_LLAMA_SERVER:?Set LOCAL_LLAMA_SERVER to the llama-server executable}"
+if [ -z "${LOCAL_LLAMA_SERVER:-}" ] && [ -n "${LLAMA_SERVER_BIN:-}" ]; then
+  LOCAL_LLAMA_SERVER="${LLAMA_SERVER_BIN}"
+fi
+
+: "${LOCAL_LLAMA_SERVER:?Set LOCAL_LLAMA_SERVER to the llama-server executable or set LLAMA_SERVER_BIN}"
 : "${LOCAL_MODEL_PATH:?Set LOCAL_MODEL_PATH to the local GGUF file}"
 : "${BASE_MODEL_NAME:?BASE_MODEL_NAME is required}"
 : "${BASE_MODEL_API_KEY:?BASE_MODEL_API_KEY is required}"
@@ -19,8 +23,15 @@ LOCAL_MODEL_UBATCH_SIZE="${LOCAL_MODEL_UBATCH_SIZE:-128}"
 LOCAL_MODEL_START_TIMEOUT="${LOCAL_MODEL_START_TIMEOUT:-900}"
 
 if [ ! -x "${LOCAL_LLAMA_SERVER}" ]; then
-  echo "llama-server is not executable: ${LOCAL_LLAMA_SERVER}" >&2
-  exit 1
+  resolved_llama_server="$(command -v "${LOCAL_LLAMA_SERVER}" 2>/dev/null || true)"
+  if [ -n "${resolved_llama_server}" ] && [ -x "${resolved_llama_server}" ]; then
+    LOCAL_LLAMA_SERVER="${resolved_llama_server}"
+    export LOCAL_LLAMA_SERVER
+  else
+    echo "llama-server is not executable or not found in PATH: ${LOCAL_LLAMA_SERVER}" >&2
+    echo "Set LOCAL_LLAMA_SERVER to the full path, for example: /home/user/llama.cpp/build/bin/llama-server" >&2
+    exit 1
+  fi
 fi
 
 if [ ! -f "${LOCAL_MODEL_PATH}" ]; then
