@@ -66,28 +66,35 @@ GAIA_DATASET_DIR=/path/to/GAIA
 Activate the conda environment containing Inspect AI, then run:
 
 ```bash
-sh runner/local_start.sh
+sh runner/localModelU.sh
 ```
 
-The local runner disables all breakpoint techniques by default, bypasses proxy
-settings for local services, links the downloaded GAIA directory into the
-Inspect Evals cache, and applies `GAIA_RUN_TIMEOUT` to the complete evaluation.
+The local Ubuntu runner reuses the same pipeline as the Colab runner, but
+selects `runner/base_model/llamaLocal.sh` so it uses your already installed
+`llama-server` and already downloaded GGUF model. It bypasses proxy settings for
+local services and links the downloaded GAIA directory into the Inspect Evals
+cache before the benchmark starts.
 
-The default Colab runner prepares browser tooling with:
+If Chromium is missing, install it into the repo-local Playwright cache used by
+the runner:
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$PWD/playwright-browsers" python -m playwright install chromium
+```
+
+If your network requires a proxy for that one-time browser download, export
+`HTTP_PROXY`/`HTTPS_PROXY` before running the install command.
+
+The default Colab runner prepares browser tooling with roughly:
 
 ```bash
 inspect-tool-support post-install
 python -m playwright install chromium
 ```
 
-The local runner performs the `inspect-tool-support post-install --no-web-browser`
-step and checks that Playwright Chromium is available before starting the model.
-To let the local runner install Chromium into `./playwright-browsers`, run once
-with:
+For local/proxy runs we split that into safer manual steps. If tool-support
+post-install is needed, avoid the browser download side effect:
 
 ```bash
-LOCAL_PLAYWRIGHT_INSTALL=1 sh runner/local_start.sh
+inspect-tool-support post-install --no-web-browser
 ```
-
-If you need a proxy for that one-time browser download, export
-`HTTP_PROXY`/`HTTPS_PROXY` before running the command.
