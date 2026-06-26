@@ -132,8 +132,9 @@ if [ "${LOCAL_TOOL_SUPPORT_POST_INSTALL}" = "1" ]; then
 fi
 
 playwright_browser_ready() {
-  "${PYTHON_BIN}" - <<'PY'
+  "${PYTHON_BIN}" - <<'PY' > "${STATE_DIR}/playwright_check.stdout" 2> "${STATE_DIR}/playwright_check.stderr"
 from pathlib import Path
+import traceback
 
 try:
     from playwright.sync_api import sync_playwright
@@ -145,7 +146,7 @@ try:
             browser.close()
             raise SystemExit(0)
 except Exception:
-    pass
+    traceback.print_exc()
 
 raise SystemExit(1)
 PY
@@ -197,6 +198,8 @@ if ! playwright_browser_ready; then
   echo "Or let this runner install it into ${REPO_PLAYWRIGHT_BROWSERS_PATH}:" >&2
   echo "  LOCAL_PLAYWRIGHT_INSTALL=1 sh runner/local_start.sh" >&2
   echo "If you use a proxy, export HTTP_PROXY/HTTPS_PROXY before the install step." >&2
+  echo "Last Playwright check error:" >&2
+  tail -40 "${STATE_DIR}/playwright_check.stderr" >&2 || true
   exit 1
 fi
 
