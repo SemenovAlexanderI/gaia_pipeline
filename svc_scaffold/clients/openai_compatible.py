@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+MAX_TOKENS_OUT = int(os.getenv("BASE_MODEL_MAX_TOKENS", "8192"))
+
 
 class ModelClientHTTPError(RuntimeError):
     def __init__(self, status_code: int, detail: str) -> None:
@@ -35,6 +37,8 @@ class OpenAICompatibleModelClient:
         request = dict(payload)
         request["model"] = self.model
         request["stream"] = False
+        if MAX_TOKENS_OUT > 0:
+            request.setdefault("max_tokens", MAX_TOKENS_OUT)
 
         timeout = float(os.getenv("BASE_MODEL_REQUEST_TIMEOUT", "1800"))
         try:
