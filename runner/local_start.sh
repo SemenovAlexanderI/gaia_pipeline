@@ -25,7 +25,16 @@ PID_FILE="${STATE_DIR}/local.pids"
 XDG_CACHE_HOME="${XDG_CACHE_HOME:-${REPO_ROOT}/_state/cache}"
 HF_HOME="${HF_HOME:-${REPO_ROOT}/_state/huggingface}"
 INSPECT_LOG_DIR="${INSPECT_LOG_DIR:-${REPO_ROOT}/_state/inspect-logs}"
-PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-${REPO_ROOT}/playwright-browsers}"
+REPO_PLAYWRIGHT_BROWSERS_PATH="${REPO_ROOT}/playwright-browsers"
+LOCAL_PLAYWRIGHT_INSTALL="${LOCAL_PLAYWRIGHT_INSTALL:-0}"
+LOCAL_TOOL_SUPPORT_POST_INSTALL="${LOCAL_TOOL_SUPPORT_POST_INSTALL:-1}"
+
+USER_HTTP_PROXY="${HTTP_PROXY:-}"
+USER_HTTPS_PROXY="${HTTPS_PROXY:-}"
+USER_ALL_PROXY="${ALL_PROXY:-}"
+USER_http_proxy="${http_proxy:-}"
+USER_https_proxy="${https_proxy:-}"
+USER_all_proxy="${all_proxy:-}"
 
 LOCAL_MODEL_HOST="${LOCAL_MODEL_HOST:-127.0.0.1}"
 LOCAL_MODEL_PORT="${LOCAL_MODEL_PORT:-18082}"
@@ -55,7 +64,8 @@ HF_DATASETS_OFFLINE=1
 TRANSFORMERS_OFFLINE=1
 
 export REPO_ROOT STATE_DIR PID_FILE XDG_CACHE_HOME HF_HOME INSPECT_LOG_DIR
-export PLAYWRIGHT_BROWSERS_PATH LOCAL_MODEL_HOST LOCAL_MODEL_PORT
+export LOCAL_PLAYWRIGHT_INSTALL LOCAL_TOOL_SUPPORT_POST_INSTALL
+export LOCAL_MODEL_HOST LOCAL_MODEL_PORT
 export BASE_MODEL_API_BASE_URL BASE_MODEL_API_KEY BASE_MODEL_NAME
 export SCAFFOLD_PORT SCAFFOLD_API_KEY SCAFFOLD_MODEL_NAME
 export GAIA_MODEL_BASE_URL GAIA_MODEL_API_KEY GAIA_MODEL_NAME
@@ -108,6 +118,87 @@ for module in required:
 if missing:
     raise SystemExit("Missing Python modules: " + ", ".join(missing))
 PY
+
+mkdir -p "${STATE_DIR}" "${INSPECT_LOG_DIR}" "${HF_HOME}"
+
+if [ "${LOCAL_TOOL_SUPPORT_POST_INSTALL}" = "1" ]; then
+  "${TOOL_SUPPORT_BIN}" post-install \
+    > "${STATE_DIR}/inspect_tool_support_post_install.stdout" \
+    2> "${STATE_DIR}/inspect_tool_support_post_install.stderr" || {
+      echo "inspect-tool-support post-install failed. Last log lines:" >&2
+      tail -40 "${STATE_DIR}/inspect_tool_support_post_install.stderr" >&2 || true
+      exit 1
+    }
+fi
+
+playwright_browser_ready() {
+  "${PYTHON_BIN}" - <<'PY'
+from pathlib import Path
+
+try:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        executable = Path(playwright.chromium.executable_path)
+        if executable.is_file():
+            browser = playwright.chromium.launch(headless=True)
+            browser.close()
+            raise SystemExit(0)
+except Exception:
+    pass
+
+raise SystemExit(1)
+PY
+}
+
+if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
+  export PLAYWRIGHT_BROWSERS_PATH
+elif [ -d "${REPO_PLAYWRIGHT_BROWSERS_PATH}" ]; then
+  PLAYWRIGHT_BROWSERS_PATH="${REPO_PLAYWRIGHT_BROWSERS_PATH}"
+  export PLAYWRIGHT_BROWSERS_PATH
+  if ! playwright_browser_ready; then
+    unset PLAYWRIGHT_BROWSERS_PATH
+  fi
+fi
+
+if ! playwright_browser_ready; then
+  if [ "${LOCAL_PLAYWRIGHT_INSTALL}" = "1" ]; then
+    PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-${REPO_PLAYWRIGHT_BROWSERS_PATH}}"
+    mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}"
+    export PLAYWRIGHT_BROWSERS_PATH
+
+    HTTP_PROXY="${USER_HTTP_PROXY}"
+    HTTPS_PROXY="${USER_HTTPS_PROXY}"
+    ALL_PROXY="${USER_ALL_PROXY}"
+    http_proxy="${USER_http_proxy}"
+    https_proxy="${USER_https_proxy}"
+    all_proxy="${USER_all_proxy}"
+    export HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+
+    "${PYTHON_BIN}" -m playwright install chromium \
+      > "${STATE_DIR}/playwright_install.stdout" \
+      2> "${STATE_DIR}/playwright_install.stderr" || {
+        unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+        echo "Playwright Chromium install failed. Last log lines:" >&2
+        tail -60 "${STATE_DIR}/playwright_install.stderr" >&2 || true
+        exit 1
+      }
+    unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+  fi
+fi
+
+if ! playwright_browser_ready; then
+  echo "Playwright Chromium is not installed or cannot launch in this Python environment." >&2
+  echo "Install it once, then rerun the benchmark:" >&2
+  echo "  conda activate <your-env>" >&2
+  echo "  python -m playwright install chromium" >&2
+  echo "If Chromium is installed but Ubuntu libraries are missing, run:" >&2
+  echo "  sudo python -m playwright install-deps chromium" >&2
+  echo "Or let this runner install it into ${REPO_PLAYWRIGHT_BROWSERS_PATH}:" >&2
+  echo "  LOCAL_PLAYWRIGHT_INSTALL=1 sh runner/local_start.sh" >&2
+  echo "If you use a proxy, export HTTP_PROXY/HTTPS_PROXY before the install step." >&2
+  exit 1
+fi
 
 : "${GAIA_DATASET_DIR:?Set GAIA_DATASET_DIR in .env}"
 : "${LOCAL_MODEL_PATH:?Set LOCAL_MODEL_PATH in .env}"
@@ -259,6 +350,7 @@ echo "  python:     ${PYTHON_BIN}"
 echo "  inspect:    ${INSPECT_BIN}"
 echo "  model:      ${LOCAL_MODEL_PATH}"
 echo "  dataset:    ${GAIA_DATASET_DIR}"
+echo "  browsers:   ${PLAYWRIGHT_BROWSERS_PATH:-playwright default cache}"
 echo "  task:       ${GAIA_TASK} (${GAIA_SPLIT})"
 echo "  eval logs:  ${INSPECT_LOG_DIR}"
 
@@ -295,6 +387,10 @@ else
     2> "${STATE_DIR}/inspect.stderr" || run_status=$?
 fi
 
+if [ "${run_status}" -eq 0 ] && grep -q "Task interrupted" "${STATE_DIR}/inspect.stdout" "${STATE_DIR}/inspect.stderr" 2>/dev/null; then
+  run_status=1
+fi
+
 if [ "${run_status}" -eq 0 ]; then
   echo "Inspect finished successfully."
 elif [ "${run_status}" -eq 124 ]; then
@@ -308,6 +404,8 @@ echo "  stderr: ${STATE_DIR}/inspect.stderr"
 echo "  evals:  ${INSPECT_LOG_DIR}"
 
 if [ "${run_status}" -ne 0 ]; then
+  echo "Last Inspect stdout lines:" >&2
+  tail -40 "${STATE_DIR}/inspect.stdout" >&2 || true
   echo "Last Inspect stderr lines:" >&2
   tail -40 "${STATE_DIR}/inspect.stderr" >&2 || true
 fi

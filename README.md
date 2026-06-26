@@ -72,3 +72,21 @@ sh runner/local_start.sh
 The local runner disables all breakpoint techniques by default, bypasses proxy
 settings for local services, links the downloaded GAIA directory into the
 Inspect Evals cache, and applies `GAIA_RUN_TIMEOUT` to the complete evaluation.
+
+The default Colab runner prepares browser tooling with:
+
+```bash
+inspect-tool-support post-install
+python -m playwright install chromium
+```
+
+The local runner performs the `inspect-tool-support` post-install step and
+checks that Playwright Chromium is available before starting the model. To let
+the local runner install Chromium into `./playwright-browsers`, run once with:
+
+```bash
+LOCAL_PLAYWRIGHT_INSTALL=1 sh runner/local_start.sh
+```
+
+If you need a proxy for that one-time browser download, export
+`HTTP_PROXY`/`HTTPS_PROXY` before running the command.
