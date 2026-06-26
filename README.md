@@ -80,9 +80,10 @@ inspect-tool-support post-install
 python -m playwright install chromium
 ```
 
-The local runner performs the `inspect-tool-support` post-install step and
-checks that Playwright Chromium is available before starting the model. To let
-the local runner install Chromium into `./playwright-browsers`, run once with:
+The local runner performs the `inspect-tool-support post-install --no-web-browser`
+step and checks that Playwright Chromium is available before starting the model.
+To let the local runner install Chromium into `./playwright-browsers`, run once
+with:
 
 ```bash
 LOCAL_PLAYWRIGHT_INSTALL=1 sh runner/local_start.sh

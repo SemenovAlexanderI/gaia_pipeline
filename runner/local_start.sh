@@ -122,7 +122,7 @@ PY
 mkdir -p "${STATE_DIR}" "${INSPECT_LOG_DIR}" "${HF_HOME}"
 
 if [ "${LOCAL_TOOL_SUPPORT_POST_INSTALL}" = "1" ]; then
-  "${TOOL_SUPPORT_BIN}" post-install \
+  "${TOOL_SUPPORT_BIN}" post-install --no-web-browser \
     > "${STATE_DIR}/inspect_tool_support_post_install.stdout" \
     2> "${STATE_DIR}/inspect_tool_support_post_install.stderr" || {
       echo "inspect-tool-support post-install failed. Last log lines:" >&2
