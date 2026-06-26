@@ -1,0 +1,7 @@
+_state/
+datasets/
+.DS_Store
+.env
+.venv
+playwright-browsers/
+__pycache__/
