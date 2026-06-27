@@ -55,6 +55,12 @@ GAIA_MAX_CONNECTIONS="${GAIA_MAX_CONNECTIONS:-1}"
 GAIA_MAX_ATTEMPTS="${GAIA_MAX_ATTEMPTS:-1}"
 GAIA_SANDBOX="${GAIA_SANDBOX:-local}"
 GAIA_RUN_TIMEOUT="${GAIA_RUN_TIMEOUT:-7200}"
+GAIA_TOOL_TIMEOUT="${GAIA_TOOL_TIMEOUT:-0}"
+case "${GAIA_TOOL_TIMEOUT}" in
+  ''|*[!0-9]*) GAIA_TOOL_TIMEOUT=0 ;;
+esac
+GAIA_NO_FAIL_ON_ERROR="${GAIA_NO_FAIL_ON_ERROR:-1}"
+GAIA_USE_LOCAL_GAIA_TASK="${GAIA_USE_LOCAL_GAIA_TASK:-auto}"
 
 NO_PROXY="localhost,127.0.0.1,0.0.0.0,::1${NO_PROXY:+,${NO_PROXY}}"
 no_proxy="${NO_PROXY}"
@@ -70,6 +76,7 @@ export BASE_MODEL_API_BASE_URL BASE_MODEL_API_KEY BASE_MODEL_NAME
 export SCAFFOLD_PORT SCAFFOLD_API_KEY SCAFFOLD_MODEL_NAME
 export GAIA_MODEL_BASE_URL GAIA_MODEL_API_KEY GAIA_MODEL_NAME
 export GAIA_TASK GAIA_SPLIT GAIA_MAX_CONNECTIONS GAIA_MAX_ATTEMPTS GAIA_SANDBOX
+export GAIA_RUN_TIMEOUT GAIA_TOOL_TIMEOUT GAIA_NO_FAIL_ON_ERROR GAIA_USE_LOCAL_GAIA_TASK
 export NO_PROXY no_proxy INSPECT_DISABLE_PROXY
 export HF_HUB_OFFLINE HF_DATASETS_OFFLINE TRANSFORMERS_OFFLINE
 
@@ -357,13 +364,37 @@ echo "  browsers:   ${PLAYWRIGHT_BROWSERS_PATH:-playwright default cache}"
 echo "  task:       ${GAIA_TASK} (${GAIA_SPLIT})"
 echo "  eval logs:  ${INSPECT_LOG_DIR}"
 
-set -- eval "${GAIA_TASK}" \
+INSPECT_TASK="${GAIA_TASK}"
+if [ "${GAIA_USE_LOCAL_GAIA_TASK}" != "0" ] && [ "${GAIA_TOOL_TIMEOUT}" -gt 0 ]; then
+  case "${GAIA_TASK}" in
+    inspect_evals/gaia)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia"
+      ;;
+    inspect_evals/gaia_level1)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia_level1"
+      ;;
+    inspect_evals/gaia_level2)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia_level2"
+      ;;
+    inspect_evals/gaia_level3)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia_level3"
+      ;;
+  esac
+fi
+
+set -- eval "${INSPECT_TASK}" \
   --model "openai-api/gaia_model/${SCAFFOLD_MODEL_NAME}" \
   --sandbox "${GAIA_SANDBOX}" \
   --max-connections "${GAIA_MAX_CONNECTIONS}" \
   -T "split=${GAIA_SPLIT}" \
   -T "max_attempts=${GAIA_MAX_ATTEMPTS}"
 
+if [ "${GAIA_TOOL_TIMEOUT}" -gt 0 ]; then
+  set -- "$@" -T "code_timeout=${GAIA_TOOL_TIMEOUT}"
+fi
+if [ -n "${GAIA_SAMPLE_TIME_LIMIT:-}" ]; then
+  set -- "$@" -T "time_limit=${GAIA_SAMPLE_TIME_LIMIT}"
+fi
 if [ -n "${GAIA_SAMPLE_START:-}" ] && [ -n "${GAIA_SAMPLE_END:-}" ]; then
   set -- "$@" --limit "${GAIA_SAMPLE_START}-${GAIA_SAMPLE_END}"
 fi
@@ -372,6 +403,9 @@ if [ -n "${GAIA_MAX_SAMPLES:-}" ]; then
 fi
 if [ -n "${GAIA_MESSAGE_LIMIT:-}" ]; then
   set -- "$@" --message-limit "${GAIA_MESSAGE_LIMIT}"
+fi
+if [ "${GAIA_NO_FAIL_ON_ERROR}" = "1" ]; then
+  set -- "$@" --no-fail-on-error
 fi
 
 run_status=0

@@ -101,12 +101,42 @@ print(f"GAIA dataset cache: {path}", file=sys.stderr)
 PY
 fi
 
-set -- eval "${GAIA_TASK}" \
+INSPECT_TASK="${GAIA_TASK}"
+GAIA_TOOL_TIMEOUT_VALUE="${GAIA_TOOL_TIMEOUT:-0}"
+case "${GAIA_TOOL_TIMEOUT_VALUE}" in
+  ''|*[!0-9]*) GAIA_TOOL_TIMEOUT_VALUE=0 ;;
+esac
+if [ "${GAIA_USE_LOCAL_GAIA_TASK:-auto}" != "0" ] && [ "${GAIA_TOOL_TIMEOUT_VALUE}" -gt 0 ]; then
+  case "${GAIA_TASK}" in
+    inspect_evals/gaia)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia"
+      ;;
+    inspect_evals/gaia_level1)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia_level1"
+      ;;
+    inspect_evals/gaia_level2)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia_level2"
+      ;;
+    inspect_evals/gaia_level3)
+      INSPECT_TASK="${REPO_ROOT}/tasks/local_gaia.py@gaia_level3"
+      ;;
+  esac
+fi
+
+set -- eval "${INSPECT_TASK}" \
   --model "openai-api/gaia_model/${SCAFFOLD_MODEL_NAME}" \
   --sandbox "${GAIA_SANDBOX}" \
   --max-connections "${GAIA_MAX_CONNECTIONS}" \
   -T "split=${GAIA_SPLIT}" \
   -T "max_attempts=${GAIA_MAX_ATTEMPTS}"
+
+if [ "${GAIA_TOOL_TIMEOUT_VALUE}" -gt 0 ]; then
+  set -- "$@" -T "code_timeout=${GAIA_TOOL_TIMEOUT_VALUE}"
+fi
+
+if [ -n "${GAIA_SAMPLE_TIME_LIMIT:-}" ]; then
+  set -- "$@" -T "time_limit=${GAIA_SAMPLE_TIME_LIMIT}"
+fi
 
 if [ -n "${GAIA_SAMPLE_START:-}" ] && [ -n "${GAIA_SAMPLE_END:-}" ]; then
   set -- "$@" --limit "${GAIA_SAMPLE_START}-${GAIA_SAMPLE_END}"
@@ -114,6 +144,14 @@ fi
 
 if [ -n "${GAIA_MAX_SAMPLES:-}" ]; then
   set -- "$@" --max-samples "${GAIA_MAX_SAMPLES}"
+fi
+
+if [ -n "${GAIA_MESSAGE_LIMIT:-}" ]; then
+  set -- "$@" --message-limit "${GAIA_MESSAGE_LIMIT}"
+fi
+
+if [ "${GAIA_NO_FAIL_ON_ERROR:-1}" = "1" ]; then
+  set -- "$@" --no-fail-on-error
 fi
 
 "${INSPECT_BIN:-${REPO_ROOT}/.venv/bin/inspect}" "$@"
